@@ -60,6 +60,8 @@ public class OHttpResponse {
   public String              callbackFunction;
   public String              contentEncoding;
   public boolean             sendStarted   = false;
+  public String              content;
+  public int                 code;
 
   public OHttpResponse(final OutputStream iOutStream, final String iHttpVersion, final String[] iAdditionalHeaders,
       final String iResponseCharSet, final String iServerInfo, final String iSessionId, final String iCallbackFunction) {
@@ -84,20 +86,25 @@ public class OHttpResponse {
       return;
     sendStarted = true;
 
-    final String content;
-    final String contentType;
+    //final String content;
+    //final String contentType;
 
     if (callbackFunction != null) {
       content = callbackFunction + "(" + iContent + ")";
       contentType = "text/javascript";
     } else {
-      content = iContent != null ? iContent.toString() : null;
-      contentType = iContentType;
+      if(content == null || content.length() == 0)
+        content = iContent != null ? iContent.toString() : null;
+      if(contentType == null || contentType.length() == 0)
+        contentType = iContentType;
     }
 
     final boolean empty = content == null || content.length() == 0;
 
-    writeStatus(empty && iCode == 200 ? 204 : iCode, iReason);
+    if(this.code > 0)
+      writeStatus(this.code, iReason);
+    else
+      writeStatus(empty && iCode == 200 ? 204 : iCode, iReason);
     writeHeaders(contentType, iKeepAlive);
 
     if (iHeaders != null)
@@ -119,9 +126,32 @@ public class OHttpResponse {
 
     writeLine(null);
 
+    OLogManager.instance().info(this, this.getResponseInfo() + " thread id: " + Thread.currentThread().getId());
     if (binaryContent != null)
       out.write(binaryContent);
     out.flush();
+  }
+
+  private String getResponseInfo() {
+    StringBuffer buffer = new StringBuffer();
+    buffer.append("Response : [");
+    try {
+      if(content != null && content.length() > 0) {
+        String strPrint = content;
+        if(content.length() > 5000)
+          strPrint = content.substring(0, 5000) + "...";
+        if(strPrint.contains("%"))
+          strPrint = strPrint.replace('%', '$');
+        buffer.append("content : " + strPrint).append(" , ");
+      }
+      buffer.append("contentType : " + contentType).append(" , ");
+      buffer.append("code : " + code).append(" , ");
+      buffer.append("content encoding : " + contentEncoding).append(" , ");
+      buffer.append("session : " + sessionId).append(" , ");
+      buffer.append("content length " + ((content == null) ? 0 : content.length()));
+    }catch(Exception ex) {ex.printStackTrace();}
+    buffer.append("]");
+    return buffer.toString();
   }
 
   public void writeStatus(final int iStatus, final String iReason) throws IOException {
@@ -468,4 +498,19 @@ public class OHttpResponse {
     this.sessionId = sessionId;
   }
 
+  public String getContent() {
+    return content;
+  }
+      
+  public void setContent(String content) {
+    this.content = content;
+  }
+      
+  public int getCode() {
+    return code;
+  }
+      
+  public void setCode(int code) {
+    this.code = code;
+  }
 }

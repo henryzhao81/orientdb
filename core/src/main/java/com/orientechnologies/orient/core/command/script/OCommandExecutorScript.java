@@ -94,6 +94,7 @@ public class OCommandExecutorScript extends OCommandExecutorAbstract {
       if (!(scriptEngine instanceof Compilable))
         throw new OCommandExecutionException("Language '" + language + "' does not support compilation");
 
+      scriptEngine.put("engine", scriptEngine);
       // COMPILE FUNCTION LIBRARY
       String lib = scriptManager.getLibrary(db, language);
       if (lib == null)

@@ -257,21 +257,34 @@ public class OServerCommandGetDatabase extends OServerCommandGetConnect {
 
       if (db.getUser() != null) {
         json.writeAttribute("currentUser", db.getUser().getName());
-
+        OLogManager.instance().info(this, "start getting user info by " + handleFormatConversion(db.getUser().getName()));
         json.beginCollection("users");
         for (ODocument doc : db.getMetadata().getSecurity().getAllUsers()) {
-          OUser user = new OUser(doc);
+          OUser user;
+          try {
+            user = new OUser(doc);
+          }catch(Exception ex) {
+            System.out.println(doc.toString());
+            ex.printStackTrace();
+            continue;  
+          }
           json.beginObject();
           json.writeAttribute("name", user.getName());
           json.writeAttribute("roles", user.getRoles() != null ? Arrays.toString(user.getRoles().toArray()) : "null");
           json.endObject();
         }
         json.endCollection();
-
+        OLogManager.instance().info(this, "start getting roles info");
         json.beginCollection("roles");
         ORole role;
         for (ODocument doc : db.getMetadata().getSecurity().getAllRoles()) {
-          role = new ORole(doc);
+          try {
+            role = new ORole(doc);
+          }catch(Exception ex) {
+            System.out.println(doc.toString());
+            ex.printStackTrace();
+            continue;
+          }
           json.beginObject();
           json.writeAttribute("name", role.getName());
           json.writeAttribute("mode", role.getMode().toString());
@@ -342,9 +355,19 @@ public class OServerCommandGetDatabase extends OServerCommandGetConnect {
       json.flush();
 
       iResponse.send(OHttpUtils.STATUS_OK_CODE, "OK", OHttpUtils.CONTENT_JSON, buffer.toString(), null);
+    } catch(Exception ex) {
+      OLogManager.instance().error(this, "error in getting database " + handleFormatConversion(ex.getMessage()));
     } finally {
       if (db != null)
         db.close();
     }
+  }
+  
+  private String handleFormatConversion(String input) {
+    String output = input;
+    if(output.contains("%")) {
+      output = output.replace('%', '$');
+    }
+    return output;
   }
 }

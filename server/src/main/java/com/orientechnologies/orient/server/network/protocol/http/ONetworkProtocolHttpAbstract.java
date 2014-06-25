@@ -26,6 +26,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.IllegalFormatException;
 import java.util.InputMismatchException;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
@@ -124,6 +125,40 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
     start();
   }
 
+  private void showRequestInfo() {
+    try {
+      String url = URLDecoder.decode(request.url, "UTF-8");
+      OLogManager.instance().info(this, "url : " + handleFormatConversion(url) + " thread id: " + Thread.currentThread().getId());
+      if (request.parameters != null && request.parameters.size() > 0) {
+        StringBuffer buffer = new StringBuffer();
+        for (Map.Entry<String, String> entry : request.parameters.entrySet()) {
+          buffer.append("key : " + entry.getKey() + " value : " + entry.getValue() + " , ");
+        }
+        OLogManager.instance().info(this, "parameter : " + handleFormatConversion(buffer.toString()));
+      }
+      StringBuffer auth = new StringBuffer();
+      List<String> authenticationParts = request.authorization != null ? OStringSerializerHelper.split(request.authorization,':') : null;
+      if(authenticationParts != null && authenticationParts.size() > 0) {
+        for(String authenticationPart : authenticationParts)
+          auth.append(authenticationPart + " , ");
+      }
+      if(request.sessionId != null && request.sessionId.length() > 0) auth.append(request.sessionId);
+      else auth.append("-");
+      OLogManager.instance().info(this, "authentication : " + handleFormatConversion(auth.toString()));
+      if(request.content != null)  OLogManager.instance().info(this, "content length : " + request.content.length());
+    } catch(Exception ex) {
+        ex.printStackTrace();
+    }
+  }
+
+  private String handleFormatConversion(String input) {
+    String output = input;
+    if(output.contains("%")) {
+      output = output.replace('%', '$');
+    }
+    return output;
+  }
+
   public void service() throws ONetworkProtocolException, IOException {
     ++connection.data.totalRequests;
     connection.data.commandInfo = null;
@@ -168,6 +203,7 @@ public abstract class ONetworkProtocolHttpAbstract extends ONetworkProtocol {
         }
       }
 
+      this.showRequestInfo();
       if (cmd != null)
         try {
           if (cmd.beforeExecute(request, response))
