@@ -1542,7 +1542,7 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
 
   protected void installHooks() {
     registerHook(new OClassTrigger(), ORecordHook.HOOK_POSITION.FIRST);
-    registerHook(new ORestrictedAccessHook(), ORecordHook.HOOK_POSITION.FIRST);
+    //registerHook(new ORestrictedAccessHook(), ORecordHook.HOOK_POSITION.FIRST);
     registerHook(new OUserTrigger(), ORecordHook.HOOK_POSITION.EARLY);
     registerHook(new OFunctionTrigger(), ORecordHook.HOOK_POSITION.REGULAR);
     registerHook(new OClassIndexManager(), ORecordHook.HOOK_POSITION.LAST);

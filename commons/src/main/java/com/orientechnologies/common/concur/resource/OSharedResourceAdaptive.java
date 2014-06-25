@@ -17,6 +17,7 @@ package com.orientechnologies.common.concur.resource;
 
 import com.orientechnologies.common.concur.OTimeoutException;
 import com.orientechnologies.common.concur.lock.OLockException;
+import com.orientechnologies.common.log.OLogManager;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -115,6 +116,17 @@ public class OSharedResourceAdaptive {
           throw new OLockException("Thread interrupted while waiting for resource of class '" + getClass() + "' with timeout="
               + timeout);
         }
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < stackTrace.length; i++) {
+            StackTraceElement ste = stackTrace[i];
+            sb.append("\tat ").append(ste.toString());
+            sb.append('\n');
+        }
+        sb.append('\n');
+        OLogManager.instance().error(this, sb.toString());
+        OLogManager.instance().error(this, "timeout on acquring exclusive lock thread id: " + Thread.currentThread().getId() 
+                + " lock object id: " + (Integer.toHexString(System.identityHashCode(lock))));
         throw new OTimeoutException("Timeout on acquiring exclusive lock against resource of class: " + getClass()
             + " with timeout=" + timeout);
       } else {
@@ -149,6 +161,17 @@ public class OSharedResourceAdaptive {
           throw new OLockException("Thread interrupted while waiting for resource of class '" + getClass() + "' with timeout="
               + timeout);
         }
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < stackTrace.length; i++) {
+            StackTraceElement ste = stackTrace[i];
+            sb.append("\tat ").append(ste.toString());
+            sb.append('\n');
+        }
+        sb.append('\n');
+        OLogManager.instance().error(this, sb.toString());
+        OLogManager.instance().error(this, "timeout on acquring exclusive lock thread id: " + Thread.currentThread().getId() 
+                + " lock object id: " + (Integer.toHexString(System.identityHashCode(lock))));
         throw new OTimeoutException("Timeout on acquiring shared lock against resource of class : " + getClass() + " with timeout="
             + timeout);
       } else
