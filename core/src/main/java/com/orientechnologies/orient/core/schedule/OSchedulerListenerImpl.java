@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.orientechnologies.common.exception.OException;
+import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.metadata.function.OFunction;
@@ -63,11 +64,15 @@ public class OSchedulerListenerImpl implements OSchedulerListener {
 		schedulers.clear();
 		final ODatabaseRecord db = ODatabaseRecordThreadLocal.INSTANCE.get();
 		if (db.getMetadata().getSchema().existsClass(OScheduler.CLASSNAME)) {
-			List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>("select from " + OScheduler.CLASSNAME + " order by name"));
-			for (ODocument d : result) {
-				d.reload();
-			    this.addScheduler(new OScheduler(d));
-			}
+            try{
+                List<ODocument> result = db.query(new OSQLSynchQuery<ODocument>("select from " + OScheduler.CLASSNAME + " order by name"));
+                for (ODocument d : result) {
+                    d.reload();
+                    this.addScheduler(new OScheduler(d));
+                }
+            }catch(OException ex) {
+                OLogManager.instance().error(this, "Failed to load scheduler" + ex.getMessage());
+            }
 		}
 	}
 	

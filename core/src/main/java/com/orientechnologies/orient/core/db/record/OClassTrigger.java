@@ -79,7 +79,7 @@ public class OClassTrigger extends ODocumentHookAbstract {
   }
 
   public DISTRIBUTED_EXECUTION_MODE getDistributedExecutionMode() {
-    return DISTRIBUTED_EXECUTION_MODE.TARGET_NODE;
+    return DISTRIBUTED_EXECUTION_MODE.SOURCE_NODE;
   }
 
   @Override

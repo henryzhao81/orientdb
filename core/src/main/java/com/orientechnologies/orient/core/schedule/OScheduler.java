@@ -124,6 +124,13 @@ public class OScheduler implements Runnable {
   public boolean isRunning() {
     return this.isRunning;
   }
+  
+  public void setDatabase(ODatabaseRecord database) {
+    if(this.db.isClosed()) {
+      OLogManager.instance().warn(this, "database closed reset required");
+      this.db = database;
+    }
+  }
 
   public void resetDocument(ODocument doc) {
     this.document = doc;
@@ -153,6 +160,10 @@ public class OScheduler implements Runnable {
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
     Date date = new Date(System.currentTimeMillis());
     OLogManager.instance().warn(this, "execute : " + this.toString() + " at " + sdf.format(date));
+    if(db == null || db.isClosed()) {
+      OLogManager.instance().warn(this, "database closed, skip execute");
+      return;
+    }
     ODatabaseRecordThreadLocal.INSTANCE.set(db);
     this.document.field(PROP_STATUS, SCHEDULER_STATUS.RUNNING);
     this.document.field(PROP_STARTTIME, System.currentTimeMillis());
@@ -166,6 +177,7 @@ public class OScheduler implements Runnable {
         db = db.getUnderlying();
       scriptManager = Orient.instance().getScriptManager();
       final ScriptEngine scriptEngine = scriptManager.getEngine(this.function.getLanguage());
+      scriptEngine.put("engine", scriptEngine);
       binding = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 
       for (OScriptInjection i : scriptManager.getInjections())
@@ -185,7 +197,8 @@ public class OScheduler implements Runnable {
 
       if (this.function.getLanguage() == null)
         throw new OConfigurationException("Database function '" + this.function.getName() + "' has no language");
-      final String funcStr = scriptManager.getFunctionDefinition(this.function);
+      //final String funcStr = scriptManager.getFunctionDefinition(this.function);
+      final String funcStr = scriptManager.getLibrary(db, this.function.getLanguage());
       if (funcStr != null) {
         try {
           scriptEngine.eval(funcStr);
