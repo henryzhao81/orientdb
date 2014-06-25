@@ -19,12 +19,16 @@ import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.core.IMap;
 import com.hazelcast.core.IQueue;
 import com.hazelcast.spi.exception.DistributedObjectDestroyedException;
+import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.OScenarioThreadLocal;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
+import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.metadata.security.OUser;
 import com.orientechnologies.orient.core.record.ORecord;
+import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.server.config.OServerUserConfiguration;
 import com.orientechnologies.orient.server.distributed.ODistributedAbstractPlugin;
 import com.orientechnologies.orient.server.distributed.ODistributedConfiguration;
@@ -280,8 +284,7 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
       // OPEN IT
       final OServerUserConfiguration replicatorUser = manager.getServerInstance().getUser(
           ODistributedAbstractPlugin.REPLICATOR_USER);
-      database = (ODatabaseDocumentTx) manager.getServerInstance().openDatabase("document", databaseName, replicatorUser.name,
-          replicatorUser.password);
+      database = (ODatabaseDocumentTx) manager.getServerInstance().openDatabase("document", databaseName, "admin", "admin");
     } else if (database.isClosed()) {
       // DATABASE CLOSED, REOPEN IT
       final OServerUserConfiguration replicatorUser = manager.getServerInstance().getUser(
@@ -425,7 +428,7 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
   protected ODistributedRequest readRequest(final IQueue<ODistributedRequest> requestQueue) throws InterruptedException {
     // GET FROM DISTRIBUTED QUEUE. IF EMPTY WAIT FOR A MESSAGE
     ODistributedRequest req = requestQueue.take();
-
+    OLogManager.instance().info(this, "take request from queue : " + req.toString());
     while (waitForMessageId.get() > -1) {
       if (req != null) {
         if (req.getId() >= waitForMessageId.get()) {
@@ -476,9 +479,13 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
       if (ODistributedServerLog.isDebugEnabled())
         ODistributedServerLog.debug(this, manager.getLocalNodeName(), iRequest.getSenderNodeName(), DIRECTION.OUT,
             "received request: %s", iRequest);
+      
+      OLogManager.instance().info(this, "LocalNodeName: " + manager.getLocalNodeName() + " senderNodeName: " + iRequest.getSenderNodeName() 
+              + " iRequest: " + iRequest.toString() + " task: " + task.getName() + " thread id: " + Thread.currentThread().getId());
 
       // EXECUTE IT LOCALLY
       final Serializable responsePayload;
+      OUser origin = null;
       try {
         if (task.isRequiredOpenDatabase())
           initDatabaseInstance();
@@ -486,12 +493,26 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
         ODatabaseRecordThreadLocal.INSTANCE.set(database);
 
         task.setNodeSource(iRequest.getSenderNodeName());
-
+ 
+        origin = ODatabaseRecordThreadLocal.INSTANCE.get().getUser();
+        if(ODatabaseRecordThreadLocal.INSTANCE.get() != null) {
+          OUser newUser = null;
+          try {
+            if (database != null) {
+              newUser = database.getMetadata().getSecurity().getUser(iRequest.getRequestLoginUserName());
+              ODatabaseRecordThreadLocal.INSTANCE.get().setUser(newUser);
+            }
+          } catch(Throwable ex) {
+            OLogManager.instance().error(this, "failed to convert to OUser " + ex.getMessage());
+          }
+        }
         responsePayload = manager.executeOnLocalNode(iRequest, database);
 
       } finally {
         if (database != null)
           database.getLevel1Cache().clear();
+        if (ODatabaseRecordThreadLocal.INSTANCE.get() != null)
+            ODatabaseRecordThreadLocal.INSTANCE.get().setUser(origin);
       }
 
       if (ODistributedServerLog.isDebugEnabled())
@@ -506,10 +527,15 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
         final IQueue<ODistributedResponse> queue = msgService.getQueue(OHazelcastDistributedMessageService
             .getResponseQueueName(iRequest.getSenderNodeName()));
 
-        if (!queue.offer(response, OGlobalConfiguration.DISTRIBUTED_QUEUE_TIMEOUT.getValueAsLong(), TimeUnit.MILLISECONDS))
+        OLogManager.instance().info(this, "response: " + response.toString() + " request id: " + response.getRequestId() + " thread id: " + Thread.currentThread().getId());
+        
+        if (!queue.offer(response, OGlobalConfiguration.DISTRIBUTED_QUEUE_TIMEOUT.getValueAsLong(), TimeUnit.MILLISECONDS)) {
+          OLogManager.instance().error(this, "Timeout on dispatching response to the thread queue " + iRequest.getSenderNodeName());
           throw new ODistributedException("Timeout on dispatching response to the thread queue " + iRequest.getSenderNodeName());
+        }
 
       } catch (Exception e) {
+        OLogManager.instance().error(this, "Cannot dispatch response to the thread queue " + iRequest.getSenderNodeName() + " | " + e.getMessage());
         throw new ODistributedException("Cannot dispatch response to the thread queue " + iRequest.getSenderNodeName(), e);
       }
 

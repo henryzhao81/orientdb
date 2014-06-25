@@ -167,6 +167,15 @@ public class OCommandExecutorSQLSelect extends OCommandExecutorSQLResultsetAbstr
     doc.unsetDirty();
     return doc;
   }
+  
+  private void printParserText() {
+    try {
+      if(parserText != null && parserText.length() > 0)
+        OLogManager.instance().info(this, "Query [" + parserText + "] thread id: " + Thread.currentThread().getId()); 
+    }catch(Exception ex) {
+      ex.printStackTrace();
+    }
+  }
 
   /**
    * Compile the filter conditions only the first time.
@@ -179,7 +188,7 @@ public class OCommandExecutorSQLSelect extends OCommandExecutorSQLResultsetAbstr
     final int pos = parseProjections();
     if (pos == -1)
       return this;
-
+    this.printParserText();
     final int endPosition = parserText.length();
 
     parserNextWord(true);
