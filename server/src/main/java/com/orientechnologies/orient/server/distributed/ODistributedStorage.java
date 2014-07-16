@@ -185,6 +185,9 @@ public class ODistributedStorage implements OStorage, OFreezableStorage, OAutosh
         if (nodes.size() == 1 && nodes.iterator().next().equals(dManager.getLocalNodeName()))
           // LOCAL NODE, AVOID TO DISTRIBUTE IT
           return wrapped.command(iCommand);
+        
+        if(nodes.size() == 0)
+          return wrapped.command(iCommand); 
 
         // TODO: OPTIMIZE FILTERING BY CHANGING TARGET PER CLUSTER INSTEAD OF LEAVING CLASS
         result = dManager.sendRequest(getName(), involvedClusters, nodes, task, EXECUTION_MODE.RESPONSE);

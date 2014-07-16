@@ -1119,6 +1119,14 @@ public abstract class ODatabaseRecordAbstract extends ODatabaseWrapperAbstract<O
               return (RET) record;
           }
         }
+        
+        ORecordId recordId =  (ORecordId)record.getIdentity();
+        if(isNew && recordId.getClusterId() > -1 && recordId.getClusterId() != rid.clusterId) {
+          String newClusterName = getClusterNameById(recordId.getClusterId());
+          checkRecordClass(record, newClusterName, recordId, isNew);
+          checkSecurity(ODatabaseSecurityResources.CLUSTER, permission, newClusterName);
+          rid.clusterId = recordId.getClusterId();
+        }
 
         if (!record.isDirty())
           return (RET) record;

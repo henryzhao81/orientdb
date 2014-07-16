@@ -188,7 +188,7 @@ public class OCommandExecutorSQLSelect extends OCommandExecutorSQLResultsetAbstr
     final int pos = parseProjections();
     if (pos == -1)
       return this;
-    this.printParserText();
+    //this.printParserText();
     final int endPosition = parserText.length();
 
     parserNextWord(true);

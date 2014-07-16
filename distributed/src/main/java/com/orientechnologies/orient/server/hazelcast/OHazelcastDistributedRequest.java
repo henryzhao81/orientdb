@@ -37,6 +37,7 @@ public class OHazelcastDistributedRequest implements ODistributedRequest, Extern
   private String              databaseName;
   private long                senderThreadId;
   private String              requestLoginUserName;
+  private boolean             skipHook = false;
   private OAbstractRemoteTask task;
 
   /**
@@ -79,6 +80,14 @@ public class OHazelcastDistributedRequest implements ODistributedRequest, Extern
 
   public void setRequestLoginUserName(String requestLoginUserName) {
     this.requestLoginUserName = requestLoginUserName;
+  }
+  
+  public boolean isSkipHook() {
+    return skipHook;
+  }
+
+  public void setSkipHook(boolean skipHook) {
+    this.skipHook = skipHook;
   }
 
 @Override
@@ -125,6 +134,7 @@ public class OHazelcastDistributedRequest implements ODistributedRequest, Extern
     out.writeUTF(databaseName);
     if (requestLoginUserName != null && requestLoginUserName.length() > 0)
       out.writeUTF(requestLoginUserName);
+    out.writeBoolean(skipHook);
     out.writeObject(task);
   }
 
@@ -135,6 +145,7 @@ public class OHazelcastDistributedRequest implements ODistributedRequest, Extern
     senderThreadId = in.readLong();
     databaseName = in.readUTF();
     requestLoginUserName = in.readUTF();
+    skipHook = in.readBoolean();
     task = (OAbstractRemoteTask) in.readObject();
   }
 
@@ -153,6 +164,7 @@ public class OHazelcastDistributedRequest implements ODistributedRequest, Extern
       buffer.append(" requestLoginUserName=");
       buffer.append(requestLoginUserName);
     }
+    buffer.append(" skipHook="+skipHook);
     return buffer.toString();
   }
 }

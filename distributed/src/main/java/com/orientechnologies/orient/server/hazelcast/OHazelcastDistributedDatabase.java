@@ -26,9 +26,14 @@ import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.OScenarioThreadLocal;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.metadata.security.ORole;
+import com.orientechnologies.orient.core.metadata.security.OSecurity;
+import com.orientechnologies.orient.core.metadata.security.OSecurityNull;
 import com.orientechnologies.orient.core.metadata.security.OUser;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
+import com.orientechnologies.orient.core.sql.OCommandSQL;
+import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.orientechnologies.orient.server.config.OServerUserConfiguration;
 import com.orientechnologies.orient.server.distributed.ODistributedAbstractPlugin;
 import com.orientechnologies.orient.server.distributed.ODistributedConfiguration;
@@ -79,6 +84,7 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
   protected Object                                    waitForOnline              = new Object();
   protected Thread                                    listenerThread;
   protected AtomicLong                                waitForMessageId           = new AtomicLong(-1);
+  protected volatile OUser                            lastUser;
 
   public OHazelcastDistributedDatabase(final OHazelcastPlugin manager, final OHazelcastDistributedMessageService msgService,
       final String iDatabaseName) {
@@ -284,12 +290,33 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
       // OPEN IT
       final OServerUserConfiguration replicatorUser = manager.getServerInstance().getUser(
           ODistributedAbstractPlugin.REPLICATOR_USER);
-      database = (ODatabaseDocumentTx) manager.getServerInstance().openDatabase("document", databaseName, "admin", "admin");
+      database = (ODatabaseDocumentTx) manager.getServerInstance().openDatabase("document", databaseName, replicatorUser.name,
+          replicatorUser.password);
     } else if (database.isClosed()) {
       // DATABASE CLOSED, REOPEN IT
       final OServerUserConfiguration replicatorUser = manager.getServerInstance().getUser(
           ODistributedAbstractPlugin.REPLICATOR_USER);
       database.open(replicatorUser.name, replicatorUser.password);
+    } else {
+        OSecurity security = database.getMetadata().getSecurity();
+        if(security == null || security instanceof OSecurityNull) {
+          OLogManager.instance().info(this, "create replicator user in DB");
+          final OServerUserConfiguration replicatorUser = manager.getServerInstance().getUser(
+              ODistributedAbstractPlugin.REPLICATOR_USER);
+          createReplicatorUser(database, replicatorUser);
+          database = (ODatabaseDocumentTx) manager.getServerInstance().openDatabase("document", databaseName, replicatorUser.name,
+              replicatorUser.password);
+        }
+    }
+  }
+  
+  private void createReplicatorUser(ODatabaseDocumentTx database, final OServerUserConfiguration replicatorUser) {
+    String strQuery = "select from ouser where name = '" + replicatorUser.name +"'";
+    OSQLSynchQuery<ODocument> query = new OSQLSynchQuery<ODocument>(strQuery);
+    List<ODocument> result = database.command(query).execute();
+    if(result == null || result.size() == 0) {
+        String strExec = "insert into ouser (name, password, status, roles) values ('"+replicatorUser.name+"', '"+replicatorUser.password+"', 'ACTIVE', [#4:0])";
+        database.command(new OCommandSQL(strExec)).execute();
     }
   }
 
@@ -428,7 +455,7 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
   protected ODistributedRequest readRequest(final IQueue<ODistributedRequest> requestQueue) throws InterruptedException {
     // GET FROM DISTRIBUTED QUEUE. IF EMPTY WAIT FOR A MESSAGE
     ODistributedRequest req = requestQueue.take();
-    OLogManager.instance().info(this, "take request from queue : " + req.toString());
+
     while (waitForMessageId.get() > -1) {
       if (req != null) {
         if (req.getId() >= waitForMessageId.get()) {
@@ -466,6 +493,14 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
 
     return req;
   }
+  
+  private String handleFormatConversion(String input) {
+      String output = input;
+      if(output.contains("%")) {
+        output = output.replace('%', '$');
+      }
+      return output;
+    }
 
   /**
    * Execute the remote call on the local node and send back the result
@@ -481,7 +516,7 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
             "received request: %s", iRequest);
       
       OLogManager.instance().info(this, "LocalNodeName: " + manager.getLocalNodeName() + " senderNodeName: " + iRequest.getSenderNodeName() 
-              + " iRequest: " + iRequest.toString() + " task: " + task.getName() + " thread id: " + Thread.currentThread().getId());
+              + " iRequest: " + handleFormatConversion(iRequest.toString()) + " task: " + task.getName() + " thread id: " + Thread.currentThread().getId());
 
       // EXECUTE IT LOCALLY
       final Serializable responsePayload;
@@ -496,16 +531,26 @@ public class OHazelcastDistributedDatabase implements ODistributedDatabase {
  
         origin = ODatabaseRecordThreadLocal.INSTANCE.get().getUser();
         if(ODatabaseRecordThreadLocal.INSTANCE.get() != null) {
-          OUser newUser = null;
+          //OUser newUser = null;
           try {
             if (database != null) {
-              newUser = database.getMetadata().getSecurity().getUser(iRequest.getRequestLoginUserName());
-              ODatabaseRecordThreadLocal.INSTANCE.get().setUser(newUser);
+              if(!iRequest.isSkipHook()) {
+                if(lastUser == null || !(lastUser.getName()).equals(iRequest.getRequestLoginUserName()))
+                  lastUser = database.getMetadata().getSecurity().getUser(iRequest.getRequestLoginUserName());
+                ODatabaseRecordThreadLocal.INSTANCE.get().setProperty("skipHook", Boolean.FALSE);
+                ODatabaseRecordThreadLocal.INSTANCE.get().setUser(lastUser);
+              }
+              else {
+                ODatabaseRecordThreadLocal.INSTANCE.get().setProperty("skipHook", Boolean.TRUE);
+                ODatabaseRecordThreadLocal.INSTANCE.get().setUser(null);
+              }
             }
           } catch(Throwable ex) {
             OLogManager.instance().error(this, "failed to convert to OUser " + ex.getMessage());
           }
         }
+        if(ODatabaseRecordThreadLocal.INSTANCE.get().getProperty("skipHook") != null && ODatabaseRecordThreadLocal.INSTANCE.get().getUser() != null)
+          OLogManager.instance().info(this, "before executeOnLocalNode : " + ODatabaseRecordThreadLocal.INSTANCE.get().getProperty("skipHook") + " current user : " + ODatabaseRecordThreadLocal.INSTANCE.get().getUser().getName());
         responsePayload = manager.executeOnLocalNode(iRequest, database);
 
       } finally {

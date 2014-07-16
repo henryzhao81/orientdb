@@ -35,6 +35,10 @@ public interface ODistributedRequest {
 
   void setRequestLoginUserName(String requestLoginUserName);
   
+  boolean isSkipHook();
+  
+  void setSkipHook(boolean skipHook);
+  
   EXECUTION_MODE getExecutionMode();
 
   String getDatabaseName();
