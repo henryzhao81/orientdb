@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/proteus/orientdb.png?label=ready&title=Ready)](https://waffle.io/proteus/orientdb)
 ## OrientDB
 
 [<img src="http://www.orientdb.org/images/graphed-tutorial-graph_small.png">](http://studio.nuvolabase.com/db/free/demo/GratefulDeadConcerts/studio/?user=reader&passthrough=false&database=/db/free/demo/GratefulDeadConcerts&password=reader)
